@@ -1,46 +1,72 @@
 import requests
-from config.config import GITHUB_GRAPHQL_URL
+from config.config import GITHUB_TOKEN, GITHUB_GRAPHQL_URL
 
-def fetch_repos_graphql(token):
+query = """
+query($cursor: String) {
+  search(query: "stars:>1000", type: REPOSITORY, first: 100, after: $cursor) {
+    pageInfo {
+      endCursor
+      hasNextPage
+    }
+    nodes {
+      ... on Repository {
+        nameWithOwner
+        stargazerCount
+        description
+        url
+        forkCount
+        createdAt
+        updatedAt
+        primaryLanguage {
+          name
+        }
+        diskUsage
+        watchers {
+          totalCount
+        }
+        repositoryTopics(first: 10) {
+          nodes {
+            topic {
+              name
+            }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+def fetch_repos_graphql():
     headers = {
-        "Authorization": f"Bearer {token}",
+        "Authorization": f"Bearer {GITHUB_TOKEN}",
         "Content-Type": "application/json"
     }
 
     repos = []
     cursor = None
 
-    for _ in range(10):  # 100 * 10 = 1000
-        query = f"""
-        {{
-          search(query: "stars:>1000", type: REPOSITORY, first: 100{', after: "' + cursor + '" ' if cursor else ''}) {{
-            pageInfo {{
-              endCursor
-              hasNextPage
-            }}
-            nodes {{
-              ... on Repository {{
-                nameWithOwner
-                stargazerCount
-              }}
-            }}
-          }}
-        }}
-        """
+    while len(repos) < 1000:
+        json_data = {"query": query, "variables": {"cursor": cursor}}
+        response = requests.post(GITHUB_GRAPHQL_URL, headers=headers, json=json_data)
+        data = response.json()["data"]["search"]
+        for node in data["nodes"]:
+            repos.append({
+                "nome": node["nameWithOwner"],
+                "estrelas": node["stargazerCount"],
+                "linguagem": node["primaryLanguage"]["name"] if node["primaryLanguage"] else None,
+                "descricao": node["description"],
+                "url": node["url"],
+                "forks": node["forkCount"],
+                "criado_em": node["createdAt"],
+                "atualizado_em": node["updatedAt"],
+                "tamanho": node["diskUsage"],
+                "topicos": [t["topic"]["name"] for t in node["repositoryTopics"]["nodes"]],
+                "watchers": node["watchers"]["totalCount"],
+            })
 
-        response = requests.post(GITHUB_GRAPHQL_URL, headers=headers, json={"query": query})
-        if response.status_code == 200:
-            data = response.json()
-            search_data = data["data"]["search"]
-            repos.extend([
-                {"nome": r["nameWithOwner"], "estrelas": r["stargazerCount"]}
-                for r in search_data["nodes"]
-            ])
-            if not search_data["pageInfo"]["hasNextPage"]:
-                break
-            cursor = search_data["pageInfo"]["endCursor"]
-        else:
-            print(f"Erro GraphQL: {response.status_code}")
+        if not data["pageInfo"]["hasNextPage"]:
             break
+        cursor = data["pageInfo"]["endCursor"]
 
     return repos

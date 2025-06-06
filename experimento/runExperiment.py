@@ -1,14 +1,13 @@
 from services.githubRestService import fetch_repos_rest
 from services.githubGraphqlService import fetch_repos_graphql
-from config.config import GITHUB_TOKEN
 import json
 import os
 
 def run_experiment():
     print("Executando experimento REST e GraphQL...")
 
-    rest_data = fetch_repos_rest(GITHUB_TOKEN)
-    graphql_data = fetch_repos_graphql(GITHUB_TOKEN)
+    rest_data = fetch_repos_rest()
+    graphql_data = fetch_repos_graphql()
 
     combined = {
         "rest": rest_data,
@@ -20,3 +19,11 @@ def run_experiment():
         json.dump(combined, f, indent=2)
 
     print("Resultados salvos em data/results.json")
+
+    print("\nRepositórios via REST:")
+    for repo in rest_data[:5]:
+        print(f"{repo['nome']} - {repo['estrelas']} estrelas - {repo['linguagem']} - {repo['descricao']} - {repo['url']}")
+
+    print("\nRepositórios via GraphQL:")
+    for repo in graphql_data[:5]:
+        print(f"{repo['nome']} - {repo['estrelas']} estrelas - {repo['linguagem']} - {repo['descricao']} - {repo['url']}")
